@@ -1,0 +1,61 @@
+{
+  "Comment": "An example of using Bedrock to chain prompts and their responses together.",
+  "StartAt": "Initialize",
+  "QueryLanguage": "JSONata",
+  "States": {
+    "Initialize": {
+      "Type": "Pass",
+      "Next": "Has Prompt?",
+      "Assign": {
+        "counter": "{% $count($states.input.prompts) %}",
+        "conversation_history": [
+          ""
+        ],
+        "input_prompts": "{% $reverse($states.input.prompts) %}"
+      }
+    },
+    "Has Prompt?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Next": "Invoke model with prompt",
+          "Condition": "{% $counter > 0 %}"
+        }
+      ],
+      "Default": "Success"
+    },
+    "Success": {
+      "Type": "Succeed",
+      "Output": "{% $join($conversation_history[[1..$count($conversation_history)]], '.') %}"
+    },
+    "Invoke model with prompt": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::bedrock:invokeModel",
+      "Arguments": {
+        "ModelId": "arn:aws:bedrock:sa-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0",
+        "Body": {
+          "anthropic_version": "bedrock-2023-05-31",
+          "max_tokens": 2000,
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{% $input_prompts[$counter - 1] %}"
+                }
+              ]
+            }
+          ]
+        },
+        "ContentType": "application/json",
+        "Accept": "application/json"
+      },
+      "Assign": {
+        "conversation_history": "{% $append($conversation_history, $states.result.Body.content[0].text) %}",
+        "counter": "{% $counter - 1 %}"
+      },
+      "Next": "Has Prompt?"
+    }
+  }
+}
